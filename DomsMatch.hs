@@ -3,15 +3,17 @@ module DomsMatch where
  import Data.List
  import Debug.Trace
  import Data.Maybe
+ import Data.Function
  
  --  domsMatch :: DomsPlayer->DomsPlayer->Int->Int->(Int,Int)
  --  type DomsPlayer = Hand->DomBoard->Player->Scores->(Dom,End)
  
  smartPlayer :: DomsPlayer
- smartPlayer hand board player scores = trace ("Putting " ++ show ((smart hand board player scores))) ((smart hand board player scores))
+ smartPlayer hand board player scores = {- trace ("Putting " ++ show ((smart hand board player scores)))-}
+  trace (show board) ((smart hand board player scores))
 
  smart :: DomsPlayer
- smart hand InitBoard player scores = tryTactics [startGame] hand InitBoard player scores
+ smart hand InitBoard player scores = tryTactics [startGame, putSafeHighest, putHighestScoring] hand InitBoard player scores
 
  smart hand board@(Board d1 d2 history) player scores  = tryTactics [putSafeHighest, putHighestScoring] hand board player scores
  
@@ -25,8 +27,8 @@ module DomsMatch where
  -- Tactic for starting the game
  startGame :: Tactic
  startGame hand board player scores
-  | put54 hand board player scores /= Nothing = trace ("Putting 54 as first move") put54 hand board player scores
-  | otherwise = trace ("Putting safeh ighest") putSafeHighest hand board player scores
+  | put54 hand board player scores /= Nothing = {-trace ("Putting 54 as first move")-} put54 hand board player scores
+  | otherwise = {-trace ("Putting safeh ighest")-} putSafeHighest hand board player scores
  
  -- Tactic to put (5,4) dom if possible. Tested, WORKS
  put54 :: Tactic
@@ -46,9 +48,10 @@ module DomsMatch where
   | not(isNothing(playDom player dom end board)) && scoreboard(fromJust (playDom player dom end board)) > maximumEnemyScore = Just maxScorer
   | otherwise = putSafeHighest t board player scores
     where maxScorer@(dom,end) = (hsdPlayer hand board player scores)
-          enemyDoms = trace ((show dom) ++ (show (getPossibleEnemyDominoes hand domSet))) (getPossibleEnemyDominoes hand domSet)
+          enemyDoms = {-trace ((show dom) ++ (show (getPossibleEnemyDominoes hand domSet)))-} (getPossibleEnemyDominoes hand domSet)
           maximumEnemyScore = maximum(getScorePossibilities enemyDoms (fromJust (playDom player dom end board)))
-          
+ 
+ -- WORKS
  getScorePossibilities :: Hand -> DomBoard -> [Int]
  getScorePossibilities hand board = traceShow ((getScorePossibilitiesR hand board ++ getScorePossibilitiesL hand board)) (getScorePossibilitiesR hand board ++ getScorePossibilitiesL hand board)
   
@@ -72,8 +75,37 @@ module DomsMatch where
   | not (doIHaveThisDomino head hand) = head : getPossibleEnemyDominoes hand tail
   | otherwise = getPossibleEnemyDominoes hand tail
  
+ {-
+  -- Gets possible dominoes which enemy can have args: my hand, domSet
+ getPossibleEnemyDominoesN :: Hand -> Hand -> DomBoard -> Hand
+ getPossibleEnemyDominoesN _ [] _ = []
+ getPossibleEnemyDominoesN [] _ _ = []
+ getPossibleEnemyDominoesN hand@(h@(d1,d2):t) allDoms@(head:tail) board@(Board dl dr history)
+  | 
+ where domsIDontHave = whatDominosIDontHave hand domSet
+-}
+ whatDominosIDontHave :: Hand -> Hand -> Hand
+ whatDominosIDontHave _ [] = []
+ whatDominosIDontHave [] _ = []
+ whatDominosIDontHave hand@(h@(d1,d2):t) allDoms@(head:tail)
+  | not (doIHaveThisDomino head hand) = head : whatDominosIDontHave hand tail
+  | otherwise = whatDominosIDontHave hand tail
+  
+  -- Getting error, no idea why :/
+{-
+ findWhatEnemyWasKnockingOn :: [History] -> Player -> Int
+ findWhatEnemyWasKnockingOn history@(h:t) player
+  | player == P1 =  (findWhatEnemyWasKnockingOnN (sortBy (compare `on` (trd3)) history) player P2)
+  | player == P2 =  (findWhatEnemyWasKnockingOnN (sortBy (compare `on` (trd3)) history) player P1)
 
- -- Checks if domino is in the hand
+  -- Gets move number when player was knocking
+ findWhatEnemyWasKnockingOnN :: [History] -> Player -> Player -> Int
+ findWhatEnemyWasKnockingOnN history@(h:t) myPlayer prevPlayer
+  | snd3 h == prevPlayer = trd3 h
+  | otherwise = findWhatEnemyWasKnockingOnN t myPlayer (snd3 h)
+-}
+  
+ -- Checks if domino is in the H
  doIHaveThisDomino :: Dom -> Hand -> Bool
  doIHaveThisDomino dom [] = False
  doIHaveThisDomino dom@(d1, d2) hand@(h:t)
@@ -85,6 +117,38 @@ module DomsMatch where
   | dom1 == dom2 = True
   | d1 == d22 && d2 == d11 = True
   | otherwise = False
+ 
+ -- Functions to work on triples
+ fst3 :: (a,b,c) -> a
+ fst3 (a,_,_) = a
+ 
+ snd3 :: (a,b,c) -> b
+ snd3 (_,b,_) = b
+ 
+ trd3 :: (a,b,c) -> c
+ trd3 (_,_,c) = c
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  
  {- play a 5's & 3's singles match between 2 given players
     play n games, each game up to 61
@@ -98,7 +162,7 @@ module DomsMatch where
  data DomBoard = InitBoard | Board Dom Dom History
                     deriving (Show)
  
- type History = [(Dom,Player,MoveNum)]
+ type History = [(Dom,Player,MoveNum)] -- ???????????????? ???????????????? CHanged from (Dom),Player,MoveNum
  -- History allows course of game to be reconstructed                                            
                                                
  data Player = P1|P2 -- player 1 or player 2
