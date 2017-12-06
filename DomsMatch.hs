@@ -10,7 +10,7 @@ module DomsMatch where
  
  smartPlayer :: DomsPlayer
  smartPlayer hand board player scores = {- trace ("Putting " ++ show ((smart hand board player scores)))-}
-  {-trace (show board)-} ((smart hand board player scores))
+  trace (show board) ((smart hand board player scores))
 
  smart :: DomsPlayer
  smart hand InitBoard player scores = tryTactics [startGame, putSafeHighest, putHighestScoring] hand InitBoard player scores
@@ -92,8 +92,7 @@ module DomsMatch where
  chooseWhichDotValueToPlay counts@(h:t) maximum start
   | h == maximum = start
   | otherwise = chooseWhichDotValueToPlay t maximum (start + 1)
-  
-    
+   
  -- Counts how many of same dots dominos exists in a hand returns a list of sums
  countHowManyOfSameDots :: Hand -> [Int]
  countHowManyOfSameDots [] = []
@@ -145,18 +144,39 @@ module DomsMatch where
   | not (doIHaveThisDomino head hand) = head : whatDominosIDontHave hand tail
   | otherwise = whatDominosIDontHave hand tail
   
-  -- Getting error, no idea why :/
+  
+ findDomsEnemyDoesntHave :: DomBoard -> Player -> Maybe [Int]
+ findDomsEnemyDoesntHave board@(Board d1 d2 history) player
+  | not(isNothing(findWhatEnemyWasKnockingOn history player)) = Just (f board player (fromJust(findWhatEnemyWasKnockingOn history player)))
+  | otherwise = Nothing
+ 
+ -- Board, moveNumsWhereKnocks, all doms which he doesnt have
+ f :: DomBoard -> Player -> [Int] -> [Int]
+ f _ _ [] = []
+ f board@(Board d1 d2 history) player moveNums@(h:t)
+  | not(isNothing(findWhatEnemyWasKnockingOn history player)) = (fst(head(constructBoardOnMoveNum history h)) : [snd(last(constructBoardOnMoveNum history h))]) ++ f board player t
+  | otherwise = f board player t
+ 
+ constructBoardOnMoveNum :: History -> Int -> [Dom]
+ constructBoardOnMoveNum [] _ = []
+ constructBoardOnMoveNum history@(h@(dom, play, moveN):t) moveNum
+  | moveN <= moveNum = dom : (constructBoardOnMoveNum t moveNum)
+  | otherwise = constructBoardOnMoveNum t moveNum
+   
+  -- Works, but needs guard shortening
+ findWhatEnemyWasKnockingOn :: History -> Player ->Maybe [Int]
+ findWhatEnemyWasKnockingOn history player
+  | player == P1 &&  fromJust (findMoveNum (sortBy (compare `on` (trd3)) history) player P2) == [] = Nothing
+  | player == P2 &&  fromJust (findMoveNum (sortBy (compare `on` (trd3)) history) player P1) == [] = Nothing
+  | player == P1 =  (findMoveNum (sortBy (compare `on` (trd3)) history) player P2)
+  | player == P2 =  (findMoveNum (sortBy (compare `on` (trd3)) history) player P1)
 
- findWhatEnemyWasKnockingOn :: [History] -> Player -> Int
- findWhatEnemyWasKnockingOn history@(h@(dom, play, moveNum):t) player
-  | player == P1 =  (findWhatEnemyWasKnockingOnN (sortBy (compare `on` (trd3)) history) player P2)
-  | player == P2 =  (findWhatEnemyWasKnockingOnN (sortBy (compare `on` (trd3)) history) player P1)
-
-  -- Gets move number when player was knocking
- findWhatEnemyWasKnockingOnN :: [History] -> Player -> Player -> Int
- findWhatEnemyWasKnockingOnN history@(h:t) myPlayer prevPlayer
-  | snd3 h == prevPlayer = trd3 h
-  | otherwise = findWhatEnemyWasKnockingOnN t myPlayer (snd3 h)
+  -- Gets move number when player was knocking. History, currentPlayer, Enemy Player
+ findMoveNum :: History -> Player -> Player ->Maybe [Int]
+ findMoveNum [] _ _ = Just []
+ findMoveNum history@(h@(dom, play, moveNum):t) myPlayer prevPlayer
+  | play == prevPlayer && play == myPlayer && not(isNothing((findMoveNum t myPlayer play)))= Just ((moveNum - 1) : fromJust (findMoveNum t myPlayer play))
+  | otherwise = findMoveNum t myPlayer play  {-trace ("me" ++ show myPlayer ++ " hist play " ++ show play ++ " prev " ++ show prevPlayer)-} 
 
 
   -- Checks if domino is in the H
@@ -216,7 +236,7 @@ module DomsMatch where
  data DomBoard = InitBoard | Board Dom Dom History
                     deriving (Show)
  
- type History = [(Dom,Player,MoveNum)] -- ???????????????? ???????????????? CHanged from (Dom),Player,MoveNum
+ type History = [(Dom,Player,MoveNum)]
  -- History allows course of game to be reconstructed                                            
                                                
  data Player = P1|P2 -- player 1 or player 2
