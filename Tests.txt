@@ -1,16 +1,175 @@
-getPossibleEnemyHand [(0,2), (2,3), (2,6), (4,3), (1,1)] domSet
-[(6,6),(6,5),(6,4),(6,3),(6,1),(6,0),(5,5),(5,4),(5,3),(5,2),(5,1),(5,0),(4,4),(4,2),(4,1),(4,0),(3,3),(3,1),(3,0),(2,2),(2,1),(1,0),(0,0)]
+Tests for winIt:
 
-put54 [(1,2),(3,4),(4,5),(2,6)] InitBoard P1 (0,0)
-Just ((5,4),L)
+  -- Testing RIGHT end to win
+  winIt [(0,2),(2,6), (4,3), (1,1)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (59,50)
+  Just ((2,6),R)
+  ________________________________________________________________________________
+  
+  -- Testing left end and a double domino
+  winIt [(0,2),(4,3),(4,4)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (59,50)
+  Just ((4,4),L)
+  ________________________________________________________________________________
+  
+  -- Testing if I can put something but it will NOT win(I can only score 62 with ((4,4),L) or 60 with ((0,2),R)
+  winIt [(0,2), (4,4)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (60,50)
+  Nothing
+  ________________________________________________________________________________
+  
+  -- Testing if I am P2
+  winIt [(0,2),(4,3),(4,4)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P1,3)]) P2 (60,60)
+  Just ((4,3),L)
+
+Tests for getTo59:
+
+  -- Test for LEFT end
+  getTo59 [(0,2),(4,3),(4,4)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P1,3)]) P1 (57,52)
+  Just ((4,4),L)
+  ________________________________________________________________________________
+  
+  -- Test for RIGHT end
+  getTo59 [(0,2),(2,6), (4,3), (1,1)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (57,50)
+  Just ((2,6),R)
+  ________________________________________________________________________________
+  
+  -- Test for I can put something but I will not score 59
+  getTo59 [(0,2),(2,6), (4,3), (1,1)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (55,50)
+  Nothing
+  ________________________________________________________________________________
+  
+  -- Test if I am P2
+  getTo59 [(0,2),(4,3),(4,4)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P1,3)]) P2 (55,58)
+  Just ((4,3),L)
+
+Tests for put54:
+
+  -- Test when I have (5,4) in the hand
+  put54 [(2,2),(4,5),(1,2)] InitBoard P1 (20,20)
+  Just ((5,4),L)
+  ________________________________________________________________________________
+  
+  -- Test when I DON'T have (5,4) in the hand
+  put54 [(2,2),(1,2)] InitBoard P1 (20,20)
+  Nothing
+
+Tests for putHighestScoring:
+  
+  -- I can put ((4,3),L) but scores only 1. ((0,2),R) scores 0. ((4,4), L) scores 2.
+  putHighestScoring [(0,2),(4,3),(4,4)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (59,50)
+  Just ((4,4),L)
+  ________________________________________________________________________________
+  
+  -- Test for not be able to put anything
+  putHighestScoring [(0,3),(6,3),(3,1)] (Board (4,1) (5,2) [((4,1),P2,1),((1,5),P1,2),((5,2),P2,3)]) P1 (59,50)
+  Nothing
+
+Tests for putSafeHighest:
+
+  -- Explanation why Nothing: Enemy was NOT knocking on any moves, so he could
+  have a lot of different dominoes(difficult to tell what he doesn't have). I could
+  put ((4,4),L) to score 2 but after that enemy could put ((2,4),R) to score 3.
+  
+  putSafeHighest [(4,4)] (Board (4,1) (5,2) [((4,1),P1,1),((1,5),P2,2),((5,2),P1,3)]) P1 (59,50)
+  Nothing
+  ________________________________________________________________________________
+  
+  -- Enemy is knocking on every move so his predicted possible hand is:
+  ENEMY HAND: [(6,6),(6,3),(6,1),(6,0),(3,3),(3,1),(3,0),(1,1),(1,0),(0,0)]
+  thus he can't put anything -> Will score 0 while I put ((4,4),R) to score 2.
+  
+  putSafeHighest [(4,4)] (Board (2,2) (4,4) [((2,2),P1,1),((1,5),P1,2),((5,4),P1,3),((4,2),P1,4),((4,4),P1,5)]) P1 (59,50)
+  Just ((4,4),R)
+
+  ________________________________________________________________________________
+  
+  -- Testing LEFT end
+  
+  putSafeHighest [(4,4)] (Board (4,1) (2,2) [((4,1),P1,1),((1,5),P1,2),((5,4),P1,3),((4,2),P1,4),((2,2),P1,5)]) P1 (59,50)
+  Just ((4,4),L)
+
+  ________________________________________________________________________________
+  
+  -- Testing if it will put the highest scoring. ((2,3),R) can be put scores 0. 
+  ((4,2),L) can be put but scores 0. ((2,6),R) scores 2 so it will be put. After
+  the move enemy can only score 0 by putting ((6,6),R)/((6,3),R),((6,0),R)
+  Enemy predicted hand: [(6,6),(6,3),(6,0),(3,3),(3,0),(0,0)]
+
+  
+  putSafeHighest [(2,3), (4,2),(2,6)] (Board (4,1) (2,2) [((4,1),P1,1),((1,5),P1,2),((5,4),P1,3),((4,2),P1,4),((2,2),P1,5)]) P1 (59,50)
+  Just ((4,4),L)
+  
+Tests for playADouble:
+  
+  -- Player will not play a double unless he has at least 3 dominoes with that dot value and enemy has none.
+  playADouble [(4,4)] (Board (4,1) (2,2) [((4,1),P1,1),((1,5),P1,2),((5,4),P1,3),((4,2),P1,4),((2,2),P1,5)]) P1 (59,50)
+  Nothing
+  ________________________________________________________________________________
+  
+  -- Player will play a double because there are >= 3 of same dot values(4), there is a double of that value(4),
+  enemy doesn't have any of that dot value(4) because he was knocking after first move which was (4,1). In addition,
+  it is the max scoring domino(scores 2).
+  
+  playADouble [(4,4),(3,4),(2,4)] (Board (4,1) (1,2) [((4,1),P1,1),((1,2),P1,2)]) P1 (59,50)
+  Just ((4,4),L)
+  
+  ________________________________________________________________________________
+  
+  -- For this, tactic to fire score difference with hsd must be <= 1.
+  In this case ((2,5),R) scores 3 but the difference is still 1(((4,4),L) scores 2).
+  So ((4,4),L) will be put.
+  
+  playADouble [(4,4),(3,4),(2,4),(2,5)] (Board (4,1) (1,2) [((4,1),P1,1),((1,2),P1,2)]) P1 (59,50)
+  Just ((4,4),L)
+
+  ________________________________________________________________________________
+  
+  -- In this case, ((1,1),L) can be put but it scores 0, thus tactic will not fire
+  because ((2,5),R) scores 2 and the difference is 2 which is > 1.
+  
+  playADouble [(1,2),(1,1),(1,3),(2,5)] (Board (1,4) (1,2) [((1,4),P1,1),((1,2),P1,2)]) P1 (59,50)
+  Nothing
+
+  ________________________________________________________________________________
+  
+  -- Without (2,5) domino in last example tactic would fire.
+  
+  playADouble [(1,2),(1,1),(1,3)] (Board (1,4) (1,2) [((1,4),P1,1),((1,2),P1,2)]) P1 (59,50)
+  Just ((1,1),L)
 
 
-startGame [(1,2),(3,4),(4,5),(2,6)] InitBoard P1 (0,0)
-Just ((5,4),L)
+Tests for getPossibleEnemyDominoes:
 
--- Can't put (4,5) so puts highest scoring
-startGame [(1,2),(3,4),(2,6),(5,5),(6,6)] InitBoard P1 (0,0) 
-Just ((6,6),L)
+  -- Testing for InitBoard
+  getPossibleEnemyDominoes [(6,5),(4,6),(2,3),(5,5)] InitBoard P1 
+  [(6,6),(6,3),(6,2),(6,1),(6,0),(5,4),(5,3),(5,2),(5,1),(5,0),(4,4),(4,3),(4,2),(4,1),(4,0),(3,3),(3,1),(3,0),(2,2),(2,1),(2,0),(1,1),(1,0),(0,0)]
+  
+  -- For empty board enemy can have any dominoes which are not in my hand.
+  ________________________________________________________________________________
+  
+  -- Testing for non-empty board, without enemy knocking
+  
+  getPossibleEnemyDominoes [(6,5),(4,6),(2,3),(5,5)] (Board (1,4) (1,2) [((1,4),P1,1),((1,2),P2,2)]) P1 
+  [(6,6),(6,3),(6,2),(6,1),(6,0),(5,4),(5,3),(5,2),(5,1),(5,0),(4,4),(4,3),(4,2),(4,0),(3,3),(3,1),(3,0),(2,2),(2,0),(1,1),(1,0),(0,0)]
+
+  -- For non-empty board without enemy knocking on any moves, enemy can have all dominoes which are NOT
+  in my hand and are NOT on the board
+  ________________________________________________________________________________
+  
+  Testing non-empty board, WITH enemy knocking
+  
+  getPossibleEnemyDominoes [(6,5),(4,6),(2,3),(5,5)] (Board (5,4) (4,2) [((5,4),P1,1),((4,2),P1,2)]) P1 
+  [(6,6),(6,3),(6,2),(6,1),(6,0),(3,3),(3,1),(3,0),(2,2),(2,1),(2,0),(1,1),(1,0),(0,0)]
+  
+  -- Enemy was knocking on first move so he doesn't have 5 or 4 dot values. 
+  His possible hand = all dominoes - dominoes in my hand - dominoes on the board - all dominoes with 5 or 4 dot values
+
+  ________________________________________________________________________________
+  
+  Testing if I am P2
+  getPossibleEnemyDominoes [(6,5),(4,6),(2,3),(5,5)] (Board (5,4) (4,2) [((5,4),P2,1),((4,2),P2,2)]) P2 
+  [(6,6),(6,3),(6,2),(6,1),(6,0),(3,3),(3,1),(3,0),(2,2),(2,1),(2,0),(1,1),(1,0),(0,0)]
+  
+
+Tests for some helper functions:
 
 whatDotsHandDoesntHave [(2,2)]
 [True,True,False,True,True,True,True]
@@ -36,24 +195,11 @@ True
 isSameDom (0,3) (3,1)
 False
 
-
 isntNothing Nothing
 False
 
 isntNothing (Just (5,3))
 True
-
--- Testing InitBoard, enemy doms can be anything what I dont have.
-getPossibleEnemyDominoes [(1,2),(3,4),(5,5),(2,6),(6,6),(3,6)] InitBoard P1
-[(6,5),(6,4),(6,1),(6,0),(5,4),(5,3),(5,2),(5,1),(5,0),(4,4),(4,2),(4,1),(4,0),(3,3),(3,2),(3,1),(3,0),(2,2),(2,0),(1,1),(1,0),(0,0)]
-
-getPossibleEnemyDominoes [(4,2),(6,6)] (Board (1,2) (0,6) [((1,2),P2,15),((2,3),P2,13),((3,0),P2,11),((0,0),P2,9),((0,4),P1,8),((4,1),P2,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7),((5,5),P1,10),((5,0),P1,12),((0,6),P1,14)]) P1
-[(6,4),(6,3),(6,2),(5,4),(5,3),(4,4),(4,3),(3,3),(3,1),(2,2),(1,1)]
-
--- Enemy was knocking after first move(he didnt have 4 or 1). Hand is made -> Removed all 4 or 1, removed everything whats on the board, removed everything what is in my hand
-getPossibleEnemyDominoes [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
-[(6,3),(6,2),(6,0),(5,5),(5,3),(5,0),(3,3),(3,2),(3,0),(2,2),(0,0)]
-
 
 makeEnemyKnock [(4,2),(5,3)] (Board (1,1) (6,5) [((1,3),P1,1),((3,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
 Just ((5,3),R)
@@ -94,3 +240,47 @@ True
 
 domExistsInHistory (1,4) [((1,3),P1,1),((3,5),P2,2),((5,2),P1,3),((2,0),P2,4),((0,1),P2,5),((1,6),P2,6),((6,5),P2,7)]
 False
+
+removeDomsWhichAreOnTheBoard [(2,3),(3,1),(1,1),(5,3)] (Board (1,3) (5,2) [((1,3),P1,1),((3,5),P2,2),((5,2),P1,3)])
+[(2,3),(1,1)]
+
+getScorePossibilitiesL [(1,4),(2,1),(1,1),(3,6)] (Board (1,3) (5,2) [((1,3),P1,1),((3,5),P2,2),((5,2),P1,3)]) P1
+[2,0,0]
+
+etScorePossibilitiesR [(1,4),(2,1),(2,2),(4,2)] (Board (1,3) (5,2) [((1,3),P1,1),((3,5),P2,2),((5,2),P1,3)]) P1
+[0,1,1]
+
+countHowManyOfSameDots [(1,4),(2,2),(2,2),(4,2)]
+[0,1,3,0,2,0,0]
+
+couldEnemyHaveThatDotValueDom 3 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+True
+
+couldEnemyHaveThatDotValueDom 1 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+False
+
+couldEnemyHaveThatDotValueDom 0 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+True
+
+couldEnemyHaveThatDotValueDom 1 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+False
+
+couldEnemyHaveThatDotValueDom 2 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+True
+
+couldEnemyHaveThatDotValueDom 4 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+False
+
+couldEnemyHaveThatDotValueDom 3 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+True
+
+couldEnemyHaveThatDotValueDom 6 [(4,2),(6,6)] (Board (1,2) (0,6) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3),((2,0),P1,4),((0,1),P2,5),((1,6),P1,6),((6,5),P2,7)]) P1
+True
+
+differenceInScoreWithHsd [(5,1),(4,2),(6,6),(5,5),(6,5)] (Board (4,2) (2,5) [((4,2),P1,1),((2,5),P1,2)]) P1 (0,0) (5,1) R
+1
+
+playADouble [(4,4),(1,2),(4,2),(5,4)] (Board (1,2) (0,4) [((4,1),P1,1),((1,5),P1,2),((5,2),P2,3)]) P1 (0,0)
+3
+Just ((4,4),R)
+

@@ -4,102 +4,130 @@ module DomsMatch where
  import Debug.Trace
  import Data.Maybe
  import Data.Function
- 
- --  domsMatch :: DomsPlayer->DomsPlayer->Int->Int->(Int,Int)
- --  type DomsPlayer = Hand->DomBoard->Player->Scores->(Dom,End)
- 
+  
+ {-
+  Smart player, tries all available tactics regarding if board is empty or not.
+ -}
  smartPlayer :: DomsPlayer
- smartPlayer hand board player scores = 
-     trace ((show board) ++ " Hand: " ++ (show hand)) ((smart hand board player scores))
+ smartPlayer hand InitBoard player scores = tryTactics [winIt, blockEnemyWin, put54, getTo59, putSafeHighest, putHighestScoring] hand InitBoard player scores
+ smartPlayer hand board@(Board d1 d2 history) player scores  = tryTactics [winIt, blockEnemyWin, getTo59, putSafeHighest, putHighestScoring] hand board player scores
 
- smart :: DomsPlayer
- smart hand InitBoard player scores = tryTactics [startGame, putSafeHighest, putHighestScoring] hand InitBoard player scores
+ {-
+  Simple player which will always put highest scoring domino or try to win the game if possible.
+ -}
+ simplePlayer :: DomsPlayer
+ simplePlayer hand InitBoard player scores = tryTactics [winIt, putHighestScoring] hand InitBoard player scores
+ simplePlayer hand board@(Board d1 d2 history) player scores  = tryTactics [winIt, putHighestScoring] hand board player scores
 
- smart hand board@(Board d1 d2 history) player scores  = tryTactics [winIt, putSafeHighest, {-playWhatIHaveALot,-} putHighestScoring] hand board player scores
- 
+ {-
+  Safe player which will try to win, if he can't then will try to put a safe domino, if he can't then put any domino.
+ -}
+ safePlayer :: DomsPlayer
+ safePlayer hand InitBoard player scores = tryTactics [winIt, putSafeHighest, putAny] hand InitBoard player scores
+ safePlayer hand board@(Board d1 d2 history) player scores  = tryTactics [winIt, putSafeHighest, putAny] hand board player scores
+
+ {-
+  Smart player without blockEnemyWin tactic.
+ -}
+ smartPlayerNoBlock :: DomsPlayer
+ smartPlayerNoBlock hand InitBoard player scores = tryTactics [winIt, put54, getTo59, putSafeHighest, playADouble, putHighestScoring] hand InitBoard player scores
+ smartPlayerNoBlock hand board@(Board d1 d2 history) player scores  = tryTactics [winIt, getTo59, putSafeHighest, playADouble, putHighestScoring] hand board player scores
+
+ {-
+  Framework for trying tactics, will try all the tactics in order they are given.
+  Args: Tactics as a list will start executing from head and move to tail,
+        my hand, board, my player, scores
+  Return: What domino to put at what end
+ -}
  tryTactics :: [Tactic] -> Hand -> DomBoard -> Player -> Scores -> (Dom, End)
- tryTactics [] _ _ _ _ = trace("CANT PUT ANYTHING!") ((-1,-1),R)
  tryTactics tactics@(h:t) hand board player scores
-  | not(isNothing (h hand board player scores)) = fromJust (h hand board player scores)
-  | otherwise = (tryTactics t hand board player scores)
+  | isntNothing(h hand board player scores) = fromJust (h hand board player scores) -- If tactic doesn't return Nothing then return it.
+  | otherwise = (tryTactics t hand board player scores) -- otherwise recursive call to try next tactic
  
+ {-
+  Tactic type.
+  Args: My hand, board, player, scores
+  Return: Maybe (Dom, End) if tactic can't be used then Nothing
+          (Dom, End) if tactic can be used
+ -}
  type Tactic = Hand -> DomBoard -> Player -> Scores -> Maybe (Dom, End)
  
+ -- Tactic to win a game (score becomes 61) if possible
  winIt :: Tactic
- winIt [] _ _ _ = Nothing
- winIt hand@(h:t) board player scores@(p1s,p2s)
-  | not(isNothing (playDom player h R board)) && player == P1 && p1s + scoreboard(fromJust (playDom player h R board)) == 61 = Just (h, R)
-  | not(isNothing (playDom player h L board)) && player == P1 && p1s + scoreboard(fromJust (playDom player h L board)) == 61 = Just (h, L)
-  | not(isNothing (playDom player h R board)) && player == P2 && p2s + scoreboard(fromJust (playDom player h R board)) == 61 = Just (h, R)
-  | not(isNothing (playDom player h L board)) && player == P2 && p2s + scoreboard(fromJust (playDom player h L board)) == 61 = Just (h, L)
-  | otherwise = winIt t board player scores
-  
-  
-  
- -- Tactic for starting the game
- startGame :: Tactic
- startGame hand board player scores
-  | put54 hand board player scores /= Nothing = {-trace ("Putting 54 as first move")-} put54 hand board player scores
-  | otherwise = {-trace ("Putting safeh ighest")-} putSafeHighest hand board player scores
+ winIt hand board player scores = getToNumber hand board player scores 61
  
- -- Tactic to put (5,4) dom if possible. Tested, WORKS
+ -- Tactic to make score for the player 59
+ getTo59 :: Tactic
+ getTo59 hand board player scores = getToNumber hand board player scores 59
+ 
+ {-
+  Tries to get a score to a certain number.
+  Args: My hand, board, my player, scores, number of score you want to get
+ -}
+ getToNumber :: Hand -> DomBoard -> Player -> Scores -> Int -> Maybe (Dom, End)
+ getToNumber [] _ _ _ _ = Nothing
+ getToNumber hand@(h:t) board player scores@(p1s,p2s) number
+  | not(isNothing (playDom player h R board)) && player == P1 && p1s + scoreboard(fromJust (playDom player h R board)) == number = Just (h, R)
+  | not(isNothing (playDom player h L board)) && player == P1 && p1s + scoreboard(fromJust (playDom player h L board)) == number = Just (h, L)
+  | not(isNothing (playDom player h R board)) && player == P2 && p2s + scoreboard(fromJust (playDom player h R board)) == number = Just (h, R)
+  | not(isNothing (playDom player h L board)) && player == P2 && p2s + scoreboard(fromJust (playDom player h L board)) == number = Just (h, L)
+  | otherwise = getToNumber t board player scores number
+ 
+ -- Tactic to put (5,4) dom if possible.
  put54 :: Tactic
  put54 [] _ _ _ = Nothing
  put54 hand board player scores
   | doIHaveThisDomino (5,4) hand = Just ((5,4), L)
   | otherwise = Nothing
-  -- maximum(map(\player,dom,end,board -> fromJust(playDom player dom end board), (getPossibleEnemyDominoes hand allDoms)))
  
+ putAny :: Tactic
+ putAny [] _ _ _ = Nothing
+ putAny hand board player scores = Just (randomPlayer hand board player scores)
+ 
+ -- Tactic to put most scoring domino
  putHighestScoring :: Tactic
  putHighestScoring hand board player scores = Just (hsdPlayer hand board player scores)
-
- -- Tactic to put highest scoring domino if enemy definately can't score higher. Tested, works
+ 
+ -- Tactic to put highest scoring domino if enemy definately can't score higher.
  putSafeHighest :: Tactic
  putSafeHighest [] _ _ _ = Nothing
- putSafeHighest hand@(h:t) board player scores = (putSafeHighestHelp hand board player (getPossibleEnemyDominoes hand board player) scores)
- 
- {-
-  | not(isNothing(playDom player dom end board)) && scoreboard(fromJust (playDom player dom end board)) > maximumEnemyScore = Just maxScorer
-  | otherwise = putSafeHighest t board player scores
-    where maxScorer@(dom,end) = (hsdPlayer hand board player scores)
-          enemyDoms = trace ("a" ++ show (getPossibleEnemyDominoes hand board player)) (getPossibleEnemyDominoes hand board player)
-          maximumEnemyScore = maximum(getScorePossibilities enemyDoms (fromJust (playDom player dom end board)))
-  -}
-  -- myhand, board, myplayer, enemyPOssiblehand
+ putSafeHighest hand@(h:t) board player scores 
+  | True = (putSafeHighestHelp hand board player (getPossibleEnemyDominoes hand board player) scores)
+  | otherwise = Nothing
   
  putSafeHighestHelp :: Hand -> DomBoard -> Player -> Hand -> Scores -> Maybe (Dom, End)
  putSafeHighestHelp [] _ _ _ _ = Nothing
  putSafeHighestHelp myHand board player enHand scores
-  | maxScorer == ((-1,-1),R) || maxScorer == ((-1,-1),L) = Nothing
-  | not(isNothing(playDom player dom end board)) && (getScorePossibilities enHand (fromJust (playDom player dom end board))) /= [] && scoreboard(fromJust (playDom player dom end board))  > (maximum(getScorePossibilities enHand (fromJust (playDom player dom end board))))= Just maxScorer
+  | maxScorer == ((-1,-1),R) || maxScorer == ((-1,-1),L) = Nothing -- if hsdPlayer can't put anything return Nothing
+  |(not(isNothing(playDom player dom end board))) && scoreboard(fromJust(playDom player dom end board))  > (myMaximum(possibleEnemyScores))= (Just maxScorer)
   | otherwise =  (putSafeHighestHelp (removeDomFromHand dom myHand) board player enHand scores)
     where maxScorer@(dom,end) = (hsdPlayer myHand board player scores)
+          possibleEnemyScores = (getScorePossibilities enHand (fromJust (playDom player dom end board)) player)
   
+ -- My maximum which handles empty list(returns 0)
+ myMaximum :: [Int] -> Int
+ myMaximum ints 
+  | ints == [] = 0
+  | otherwise = maximum ints
+  
+ -- Removes domino from a hand
  removeDomFromHand :: Dom -> Hand -> Hand
  removeDomFromHand _ [] = []
  removeDomFromHand dom hand@(h:t)
   | not(isSameDom dom h) = h : removeDomFromHand dom t
   | otherwise = removeDomFromHand dom t
 
-  {-
- -- Works.
- playWhatIHaveALot :: Tactic
- playWhatIHaveALot hand@(h:t) board player scores
-  | max > 3 && doIHaveADoubleOfThat hand whichOneToPlay && not(isNothing(playDom player doubleDom L board)) && differenceInScoreWithHsd hand board player scores doubleDom < 2 = trace ("board " ++ show board ++ " hand " ++ show hand ++ " putting " ++ show (doubleDom, L))Just (doubleDom, L)
-  | max > 3 && doIHaveADoubleOfThat hand whichOneToPlay && not(isNothing(playDom player doubleDom R board)) && differenceInScoreWithHsd hand board player scores doubleDom < 2 = trace ("yo") Just (doubleDom, R)
+ -- Tactic to play a double
+ playADouble :: Tactic
+ playADouble [] _ _ _ = Nothing
+ playADouble hand@(h:t) board player scores
+  | max >= 3 && doIHaveADoubleOfThat hand whichOneToPlay && not(isNothing(playDom player doubleDom L board)) && differenceInScoreWithHsd hand board player scores doubleDom L < 2 && not (couldEnemyHaveThatDotValueDom whichOneToPlay hand board player) = Just (doubleDom, L)
+  | (max) >= 3 && (not(isNothing(playDom player doubleDom R board))) && (differenceInScoreWithHsd hand board player scores doubleDom R) < 2 && (not (couldEnemyHaveThatDotValueDom whichOneToPlay hand board player))= Just (doubleDom, R)
   | otherwise = Nothing
     where whichOneToPlay =  chooseWhichDotValueToPlay (countHowManyOfSameDots hand) (max) 0
-          max = maximum(countHowManyOfSameDots hand)
+          max = maximum (countHowManyOfSameDots hand)
           doubleDom = (whichOneToPlay, whichOneToPlay)
-  
- differenceInScoreWithHsd :: Hand -> DomBoard -> Player -> Scores -> Dom -> Int
- differenceInScoreWithHsd hand@(h:t) board player scores domino
-  | not(isNothing (dom)) = scoreboard(fromJust (playDom player dom end board)) - scoreboard (fromJust (playDom player domino L board))
-  | otherwise = 99
-  where maxScoreDom@(dom, end) = putHighestScoring hand board player scores
- -}
- 
- 
+          
  -- Checks if hand has a double of given int
  doIHaveADoubleOfThat :: Hand -> Int -> Bool
  doIHaveADoubleOfThat [] _ = False
@@ -107,75 +135,147 @@ module DomsMatch where
   | d1 == numDots && d2 == numDots = True
   | otherwise = doIHaveADoubleOfThat t numDots
  
- -- Counts list, maximum value of it, which one is max, start index. WORKS!
+ -- Counts list, maximum value of it, which one is max, start index.
  chooseWhichDotValueToPlay :: [Int] -> Int -> Int -> Int
+ chooseWhichDotValueToPlay [] _ _ = 0
  chooseWhichDotValueToPlay counts@(h:t) maximum start
   | h == maximum = start
   | otherwise = chooseWhichDotValueToPlay t maximum (start + 1)
-   
- -- Counts how many of same dots dominos exists in a hand returns a list of sums
+
+ {-
+  Calculates score difference between most scoring and given domino
+  Args: my hand, board, my player, scores, domino, end
+  Return: Difference between hsd score and given dom+end score
+ -} 
+ differenceInScoreWithHsd :: Hand -> DomBoard -> Player -> Scores -> Dom -> End -> Int
+ differenceInScoreWithHsd hand@(h:t) board player scores domino end 
+  | isntNothing(playDom player hsdDom hsdEnd board) = scoreboard(fromJust(playDom player hsdDom hsdEnd board)) - scoreboard(fromJust(playDom player domino end board))
+  | otherwise = 99
+    where hsdDom = fst (hsdPlayer hand board player scores)
+          hsdEnd = snd (hsdPlayer hand board player scores)
+ 
+ {-
+  Checks if enemy can have given dot value in his hand
+  Args: dot value, my hand, board, my player
+  Return: True if enemy can have that dot value,
+          False otherwise
+ -}
+ couldEnemyHaveThatDotValueDom :: Int -> Hand -> DomBoard -> Player -> Bool
+ couldEnemyHaveThatDotValueDom dots hand board player = couldEnemyHaveThatDotValueDomHelp dots hand board player (getPossibleEnemyDominoes hand board player)
+ 
+ couldEnemyHaveThatDotValueDomHelp :: Int -> Hand -> DomBoard -> Player -> Hand -> Bool
+ couldEnemyHaveThatDotValueDomHelp _ _ _ _ [] = False
+ couldEnemyHaveThatDotValueDomHelp dots hand board player enemyHand@(h:t)
+  | domHasDots h [dots] = True
+  | otherwise = couldEnemyHaveThatDotValueDomHelp dots hand board player t
+  
+ {-
+  Counts how many of same dot values there are in the hand.
+  Args: Hand
+  Return: List of Ints which represent how many of that dot value there are in the hand
+ -}
  countHowManyOfSameDots :: Hand -> [Int]
  countHowManyOfSameDots [] = []
- countHowManyOfSameDots hand@(h@(d1,d2):t) = [count hand 0, count hand 1, count hand 2, count hand 3, count hand 4, count hand 5, count hand 6]
+ countHowManyOfSameDots hand@(h@(d1,d2):t) = [countHowManyDotValues hand 0, countHowManyDotValues hand 1, countHowManyDotValues hand 2, countHowManyDotValues hand 3, countHowManyDotValues hand 4, countHowManyDotValues hand 5, countHowManyDotValues hand 6]
   
- count :: Hand -> Int -> Int
- count [] _ = 0
- count hand@(h@(d1,d2):t) number
-  | d1 == number || d2 == number = 1 + count t number
-  | otherwise = count t number
- 
- -- WORKS
- getScorePossibilities :: Hand -> DomBoard -> [Int]
- getScorePossibilities hand board = {-traceShow ((getScorePossibilitiesR hand board ++ getScorePossibilitiesL hand board)) -}(getScorePossibilitiesR hand board ++ getScorePossibilitiesL hand board)
+ countHowManyDotValues :: Hand -> Int -> Int
+ countHowManyDotValues [] _ = 0
+ countHowManyDotValues hand@(h@(d1,d2):t) number
+  | d1 == number || d2 == number = 1 + countHowManyDotValues t number
+  | otherwise = countHowManyDotValues t number
+
+ {-
+  Gets score possiblities which can be scored with given hand on given board.
+  Args: my hand, board, my player
+  Return: List of possible scores as Ints
+ -}
+ getScorePossibilities :: Hand -> DomBoard -> Player -> [Int]
+ getScorePossibilities hand board player = (getScorePossibilitiesR hand board player ++ getScorePossibilitiesL hand board player)
   
- getScorePossibilitiesR :: Hand -> DomBoard -> [Int]
- getScorePossibilitiesR [] _ = []
- getScorePossibilitiesR hand@(h:t) domBoard
-  | not (isNothing (playDom P1 h R domBoard)) = scoreboard(fromJust(playDom P1 h R domBoard)) : (getScorePossibilitiesR t domBoard)
-  | otherwise = getScorePossibilitiesR t domBoard
+ {-
+  Gets possible scores for putting dominoes on the RIGHT end.
+  Args: My hand, board, my player
+  Return: List of ints, every int is score possibility
+ -}
+ getScorePossibilitiesR :: Hand -> DomBoard -> Player -> [Int]
+ getScorePossibilitiesR [] _ _ = []
+ getScorePossibilitiesR hand@(h:t) domBoard player
+  | not (isNothing (playDom player h R domBoard)) = scoreboard(fromJust(playDom player h R domBoard)) : (getScorePossibilitiesR t domBoard player)
+  | otherwise = getScorePossibilitiesR t domBoard player
  
- getScorePossibilitiesL :: Hand -> DomBoard -> [Int]
- getScorePossibilitiesL [] _ = []
- getScorePossibilitiesL hand@(h:t) domBoard
-  | not (isNothing (playDom P1 h L domBoard)) = scoreboard(fromJust(playDom P1 h L domBoard)) : getScorePossibilitiesL t domBoard
-  | otherwise = getScorePossibilitiesL t domBoard
+ {-
+  Gets possible scores for putting dominoes on the LEFT end.
+  Args: My hand, board, my player
+  Return: List of ints, every int is score possibility
+ -}
+ getScorePossibilitiesL :: Hand -> DomBoard -> Player -> [Int]
+ getScorePossibilitiesL [] _ _ = []
+ getScorePossibilitiesL hand@(h:t) domBoard player
+  | not (isNothing (playDom player h L domBoard)) = scoreboard(fromJust(playDom player h L domBoard)) : getScorePossibilitiesL t domBoard player
+  | otherwise = getScorePossibilitiesL t domBoard player
  
+ {-
+  Gets possible enemy dominoes.
+  Args: my hand, board, my player
+  Return: Enemy hand
+ -}
  getPossibleEnemyDominoes :: Hand -> DomBoard -> Player -> Hand
- getPossibleEnemyDominoes hand InitBoard player = getAllDomsIDontHave hand domSet
+ getPossibleEnemyDominoes hand InitBoard player = (getAllDomsIDontHave hand domSet)
  getPossibleEnemyDominoes hand@(h:t) board@(Board d1 d2 history) player
-  | not(isNothing(findDomsEnemyDoesntHave board player)) = trace ("ENEMY HAND: " ++ show (removeDomsWhichAreOnTheBoard (removeFromHandWhatEnemyDoesntHave (getAllDomsIDontHave hand domSet) (fromJust (findDomsEnemyDoesntHave board player))) board)) (removeDomsWhichAreOnTheBoard (removeFromHandWhatEnemyDoesntHave (getAllDomsIDontHave hand domSet) (fromJust (findDomsEnemyDoesntHave board player))) board)
+  | not(isNothing(findDomsEnemyDoesntHave board player)) = ( (removeDomsWhichAreOnTheBoard (removeFromHandWhatEnemyDoesntHave (getAllDomsIDontHave hand domSet) (fromJust (findDomsEnemyDoesntHave board player))) board))
   | otherwise = (removeDomsWhichAreOnTheBoard (getAllDomsIDontHave hand domSet) board)
   
-  
+ {-
+  Removes dominoes which are on the board.
+  Args: Hand, board
+  Return: Returns hand which has dominoes removed
+ -}
  removeDomsWhichAreOnTheBoard :: Hand -> DomBoard -> Hand
  removeDomsWhichAreOnTheBoard [] _ = []
  removeDomsWhichAreOnTheBoard hand@(h:t) board@(Board d1 d2 history)
   | not(domExistsInHistory h history) = h : removeDomsWhichAreOnTheBoard t board
   | otherwise = removeDomsWhichAreOnTheBoard t board
-  
- -- Works.
+    
+ {-
+  Checks if given domino exists in history.
+  Args: Domino, History
+  Return: True if it exists,
+          False if it doesn't
+ -}
  domExistsInHistory :: Dom -> History -> Bool
  domExistsInHistory _ [] = False
  domExistsInHistory domino history@(h@(dom, player, moveNum):t)
   | isSameDom dom domino = True
   | otherwise = domExistsInHistory domino t
  
- 
- -- Works!. Enemy hand, dots enemy doesnt have
+ {-
+  Removes from enemy hand what is sure that he doesnt have
+  Args: Enemy hand, Dot values what enemy doesn't have
+  Return: Enemy hand with removed doms which have dom values
+ -}
  removeFromHandWhatEnemyDoesntHave:: Hand -> [Int] -> Hand
  removeFromHandWhatEnemyDoesntHave [] _ = []
  removeFromHandWhatEnemyDoesntHave hand@(handH:handT) dots
   | not (domHasDots handH dots) = handH : removeFromHandWhatEnemyDoesntHave handT dots
   | otherwise = removeFromHandWhatEnemyDoesntHave handT dots
-  
+   
+ {-
+  Checks if domino has any of given dot values
+  Args: Domino, dot values as a list of Ints
+  Return: True if there exists any of the given dot values,
+          False otherwise
+ -}
  domHasDots :: Dom -> [Int] -> Bool
  domHasDots _ [] = False
  domHasDots dom@(d1,d2) dots@(h:t)
   | d1 == h || d2 == h = True
   | otherwise = domHasDots dom t
  
-
- -- Gets possible dominoes which enemy can have args: my hand, domSet
+ {-
+  Gets all the dominoes which I don't have.
+  Args: My hand, all dominoes(domSet)
+  Return: Hand which is my hand's dominoes removed from all dominoes
+ -}
  getAllDomsIDontHave :: Hand -> Hand -> Hand
  getAllDomsIDontHave _ [] = []
  getAllDomsIDontHave [] _ = []
@@ -184,15 +284,10 @@ module DomsMatch where
   | otherwise = getAllDomsIDontHave hand tail
  
  {-
-  -- Gets possible dominoes which enemy can have args: my hand, domSet
- getPossibleEnemyDominoesN :: Hand -> Hand -> DomBoard -> Hand
- getPossibleEnemyDominoesN _ [] _ = []
- getPossibleEnemyDominoesN [] _ _ = []
- getPossibleEnemyDominoesN hand@(h@(d1,d2):t) allDoms@(head:tail) board@(Board dl dr history)
-  | 
- where domsIDontHave = whatDominosIDontHave hand domSet
--}
-
+  Gets all the dominoes which I don't have.
+  Args: My hand, all dominoes(domSet)
+  Return: Hand which is my hand's dominoes removed from all dominoes
+ -}
  whatDominosIDontHave :: Hand -> Hand -> Hand
  whatDominosIDontHave _ [] = []
  whatDominosIDontHave [] _ = []
@@ -200,7 +295,11 @@ module DomsMatch where
   | not (doIHaveThisDomino head hand) = head : whatDominosIDontHave hand tail
   | otherwise = whatDominosIDontHave hand tail
   
-  
+ {-
+  Find dominoes what enemy doesn't have.
+  Args: Board, my player
+  Return: List of Ints which represent what dot values enemy doesn't have
+ -}
  findDomsEnemyDoesntHave :: DomBoard -> Player -> Maybe [Int]
  findDomsEnemyDoesntHave board@(Board d1 d2 history) player
   | not(isNothing(findWhatEnemyWasKnockingOn history player)) = Just (f board player (fromJust(findWhatEnemyWasKnockingOn history player)))
@@ -213,35 +312,108 @@ module DomsMatch where
   | not(isNothing(findWhatEnemyWasKnockingOn history player)) = (fst(head(constructBoardOnMoveNum history h)) : [snd(last(constructBoardOnMoveNum history h))]) ++ f board player t
   | otherwise = f board player t
  
+ {-
+  Constructs a board on some move number.
+  Args: History, move number
+  Return: A list of dominoes. Head of the list is leftmost in the board, rightmost for the last.
+ -}
  constructBoardOnMoveNum :: History -> Int -> [Dom]
  constructBoardOnMoveNum [] _ = []
  constructBoardOnMoveNum history@(h@(dom, play, moveN):t) moveNum
   | moveN <= moveNum = dom : (constructBoardOnMoveNum t moveNum)
   | otherwise = constructBoardOnMoveNum t moveNum
    
-  -- Works, but needs guard shortening
+  {-
+    Finds move numbers on which enemy was knocking on.
+    Args: History, my player
+    Return: A list of Ints which represent move numbers on which enemy was knocking.
+  -}
  findWhatEnemyWasKnockingOn :: History -> Player ->Maybe [Int]
  findWhatEnemyWasKnockingOn history player
-  | player == P1 &&  fromJust (findMoveNum (sortBy (compare `on` (trd3)) history) player P2) == [] = Nothing
-  | player == P2 &&  fromJust (findMoveNum (sortBy (compare `on` (trd3)) history) player P1) == [] = Nothing
+  | fromJust (findMoveNum (sortBy (compare `on` (trd3)) history) player P2) == [] ||  fromJust (findMoveNum (sortBy (compare `on` (trd3)) history) player P1)== [] = Nothing
   | player == P1 =  (findMoveNum (sortBy (compare `on` (trd3)) history) player P2)
   | player == P2 =  (findMoveNum (sortBy (compare `on` (trd3)) history) player P1)
 
   -- Gets move number when player was knocking. History, currentPlayer, Enemy Player
+ {-
+  Gets moves numbers on when enemy player was knocking.
+  Args: History, my player, enemy player
+  Return: A list of ints which represent which moves was enemy knocking on.
+ -}
  findMoveNum :: History -> Player -> Player ->Maybe [Int]
  findMoveNum [] _ _ = Just []
  findMoveNum history@(h@(dom, play, moveNum):t) myPlayer prevPlayer
   | play == prevPlayer && play == myPlayer && not(isNothing((findMoveNum t myPlayer play)))= Just ((moveNum - 1) : fromJust (findMoveNum t myPlayer play))
-  | otherwise = findMoveNum t myPlayer play  {-trace ("me" ++ show myPlayer ++ " hist play " ++ show play ++ " prev " ++ show prevPlayer)-} 
+  | otherwise = findMoveNum t myPlayer play
 
-
-  -- Checks if domino is in the H
+ {-
+  Tactic to block enemy from winning. 
+ -}
+ blockEnemyWin :: Tactic
+ blockEnemyWin hand board player scores
+  | player == P1 && winIt enemyHand (fromJust(playDom player dom end board)) P2 scores /= Nothing = makeEnemyKnock hand board player
+  | player == P2 && winIt enemyHand (fromJust(playDom player dom end board)) P1 scores /= Nothing = makeEnemyKnock hand board player
+  | otherwise = Nothing
+    where enemyHand = (getPossibleEnemyDominoes hand board player)
+          myMove@(dom, end) = (smartPlayerNoBlock hand board player scores)
+ 
+ {-
+  Makes enemy knock according to what he has.
+  Args: Hand(my hand), Board, Player(my player)
+  Returns: Just (Dom,End) or Nothing (if enemy can't be knocked)
+ -} 
+ makeEnemyKnock :: Hand -> DomBoard -> Player -> Maybe (Dom, End)
+ makeEnemyKnock [] _ _ = Nothing
+ makeEnemyKnock hand@(h:t) board player 
+  | isntNothing(createdBoardL) && (whatDotsEnemyDoesntHaveList!!(fst ldomL)) && (whatDotsEnemyDoesntHaveList!!(snd ldomR)) = Just (h,L)
+  | isntNothing(createdBoardR) && whatDotsEnemyDoesntHaveList!!(fst rdomL) && whatDotsEnemyDoesntHaveList!!(snd rdomR) = Just (h,R)
+  | otherwise = makeEnemyKnock t board player
+    where whatDotsEnemyDoesntHaveList = (whatDotsHandDoesntHave (getPossibleEnemyDominoes hand board player))
+          createdBoardL = playDom player h L board
+          createdBoardR =(playDom player h R board)
+          fromJustedCreatedBoardL@(Board ldomL ldomR lh) = fromJust(createdBoardL)
+          fromJustedCreatedBoardR@(Board rdomL rdomR rh) = (fromJust(createdBoardR))  
+  
+ {-
+  Finds what dot values doesn't exist in a hand.
+  Args: Hand
+  Returns: List of length 6 of bool values.
+  e.g if List!!3 is True means there is NOT dot value 3
+ -}
+ whatDotsHandDoesntHave :: Hand -> [Bool]
+ whatDotsHandDoesntHave hand = [not(isDotValueInHand hand 0), not(isDotValueInHand hand 1), not(isDotValueInHand hand 2),
+                                not(isDotValueInHand hand 3), not(isDotValueInHand hand 4), not(isDotValueInHand hand 5),
+                                not(isDotValueInHand hand 6)]
+ {-
+  Checks if some dot value exists in the hand.
+  Args: Hand, dot value
+  Returns: True if there is a domino in the hand
+  which has given dot value.
+           False otherwise
+ -}
+ isDotValueInHand :: Hand -> Int -> Bool
+ isDotValueInHand [] _ = False
+ isDotValueInHand hand@(h@(d1,d2):t) dotValue
+  | d1 == dotValue || d2 == dotValue = True
+  | otherwise = isDotValueInHand t dotValue
+   
+ {-
+  Checks if domino exists in the hand.
+  Args: Domino, Hand
+  Returns: True if domino exists in the hand,
+           False otherwise 
+ -}
  doIHaveThisDomino :: Dom -> Hand -> Bool
  doIHaveThisDomino dom [] = False
  doIHaveThisDomino dom@(d1, d2) hand@(h:t)
   | isSameDom dom h = True
   | otherwise = doIHaveThisDomino dom t
   
+ {- 
+ Checks if 2 dominoes are the same. 
+ Args: Domino1, Domino2. 
+ Returns: True if they are the same, false otherwise
+ -}
  isSameDom :: Dom -> Dom -> Bool
  isSameDom dom1@(d1,d2) dom2@(d11,d22)
   | dom1 == dom2 = True
@@ -258,6 +430,12 @@ module DomsMatch where
  trd3 :: (a,b,c) -> c
  trd3 (_,_,c) = c
  
+ -- Checks if maybe type isn't nothing
+ isntNothing :: Maybe a -> Bool
+ isntNothing a
+  | not(isNothing a) = True
+  | otherwise = False
+
  
  
  
@@ -273,23 +451,11 @@ module DomsMatch where
  
  
  
- 
- 
- 
- 
- 
- 
- 
- {- play a 5's & 3's singles match between 2 given players
-    play n games, each game up to 61
- -}
- 
- --import Doms
  
  type Dom = (Int,Int)
  -- with highest pip first i.e. (6,1) not (1,6)
 
- data DomBoard = InitBoard | Board Dom Dom History
+ data DomBoard = InitBoard|Board Dom Dom History
                     deriving (Show)
  
  type History = [(Dom,Player,MoveNum)]
@@ -316,6 +482,7 @@ module DomsMatch where
                                          (1,1),(1,0),
                                                (0,0)]
                                                                                          
+ 
  type Move = (Dom,End)
  type Scores = (Int,Int)
                                                                                               
